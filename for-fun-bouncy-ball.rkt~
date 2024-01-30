@@ -10,12 +10,19 @@
 ;; ===========
 
 
+
+(define (fn-for-ball b)
+  (... (ball-x b)
+       (ball-y b)
+       (ball-dx b)
+       (ball-dy b)))
+
 ;; Constants:
 
 (define WIDTH 400)
 (define HEIGHT 400)
 (define B-COEFF 0.9) ; Bounce coefficient (coefficient of velocity after bounce)
-(define GRAVITY 1) ; acceleration due to gravity, positive is down
+(define GRAVITY 4) ; acceleration due to gravity, positive is down
 (define BALL-RADIUS 20)
 (define BALL-IMAGE (circle BALL-RADIUS "solid" "black"))
 (define MTS (empty-scene WIDTH HEIGHT))
@@ -27,50 +34,25 @@
 (define LEFT BALL-RADIUS)
 (define RIGHT (- WIDTH BALL-RADIUS 1))
 
-;; Data Definitions
+;; Local types
 (@htdd Ball)
-(define-struct ball [x y dx dy]) 
-;; Ball is (make-ball Number Number Number Number)
-;; interp. a ball with position x y and velocity dx dy
-;; CONSTRAINT: x within [LEFT, RIGHT], y within [TOP, BOT]
+(define-struct ball [x y dx dy]) ;num num num num
+(define B1 (make-ball TOP (+ TOP 100) 10 0))
+;; ===========
+;; Data Definitions
 
-(define B1 (make-ball LEFT (+ TOP 0) 1 0))
-(define B2 (make-ball RIGHT (+ TOP 0) -1 0))
-
-(@dd-template-rules compound) ; 4 fields
-
-(define (fn-for-ball b)
-  (... (ball-x b)
-       (ball-y b)
-       (ball-dx b)
-       (ball-dy b)))
-
-(@htdd ListOfBall)
-
-;; ListOfBall is one of:
-;;  - empty
-;;  - (cons Ball ListOfBall)
-;; interp. a list of Ball
-
-(define LoB0 (cons B1 (cons B2 empty)))
-(define LoB1 empty)
-(define LoB2 (cons (make-ball 0 0 0 0) empty))
-(define LoB3 (cons (make-ball 0 0 0 0) (cons (make-ball 1 1 2 2) empty)))
-
-
-(@dd-template-rules one-of
-                    atomic-distinct ; empty
-                    compound        ; (cons Ball ListOfBall) is ListOfBall
-                    ref             ; (first ListOfBall) is Ball
-                    self-ref)       ; (rest ListOfBall) is ListOfBall
-
-(@template-origin ListOfBall)
-
-(define (fn-for-lob lob)
-  (cond [(empty? lob) (...)]
-        [else (... (fn-for-ball (first lob))
-                   (fn-for-lob (rest lob)))]))
-
+;(@htdd BallX)
+;;; BallX is number
+;;; interp. x position of ball
+;;; constraint [LEFT, RIGHT]
+;
+;;(define X1 22)
+;;(define X2 RIGHT)
+;
+;(@dd-template-rules atomic-non-distinct)
+;
+;(define (fn-for-ballx x)
+;  (... x))
 
 (@htdf main)
 (@signature Ball -> Ball)
@@ -80,37 +62,28 @@
 
 (define (main b)
   (big-bang b           ; Ball
-    (on-tick tock)      ; Ball -> Ball
+    (on-tick next-ball)      ; Ball -> Ball
     (to-draw render)))  ; Ball -> Image
 
-(@htdf tock)
-(@signature ListOfBall -> ListOfBall)
-;; Produce ListOfBall with all Balls updated for next tick
-
-(check-expect (tock LoB1) empty)
-(check-expect (tock LoB2)
-              (cons (next-ball (make-ball 0 0 0 0)) empty))
-(check-expect (tock LoB3)
-              (cons (next-ball (make-ball 0 0 0 0)) (cons (next-ball (make-ball 1 1 2 2)) empty)))
-
-;(define (tock lob) lob) ;stub
-
-(@template-origin ListOfBall)
-
-(@template
- (define (tock lob)
-   (cond [(empty? lob) (...)]
-         [else (... (fn-for-ball (first lob))
-                    (tock (rest lob)))])))
-
-(define (tock lob)
-  (cond [(empty? lob) empty]
-        [else
-         (cons (next-ball (first lob)) (tock (rest lob)))]))
 
 (@htdf next-ball)
-(@signature Ball -> Ball)
+(@signature Ball -> Physic)
 ;; Produce Balls states for next tick
+;(check-expect (next-ball
+;               (make-ball (/ WIDTH 2) TOP 10 0))
+;              (make-ball (+ (/ WIDTH 2) 10) (+ TOP 10) 10 (+ GRAVITY 0)))
+;(check-expect (next-ball
+;               (make-ball (/ WIDTH 2) (+ BOT 20) 10 200))
+;              (make-ball (+ (/ WIDTH 2) 10) (- BOT 180) 10 (* (- 0 200) B-COEFF)))
+;(check-expect (next-ball (make-ball (- RIGHT 6) TOP -10 0))
+;              (make-ball (- RIGHT 4) (+ TOP 10) 10 (+ GRAVITY 0)))
+;(check-expect (next-ball (make-ball (- RIGHT 4) TOP 10 0))
+;              (make-ball (- RIGHT 6) (+ TOP 10) -10 (+ GRAVITY 0)))
+;(check-expect (next-ball (make-ball (+ LEFT 6) TOP -10 0))
+;              (make-ball (+ LEFT 4) (+ TOP 10) 10 (+ GRAVITY 0)))
+;(check-expect (next-ball (make-ball (- RIGHT 4) TOP -10 0))
+;              (make-ball (- RIGHT 6) (+ TOP 10) 10 (+ GRAVITY 0)))
+
 
 ;(define (next-ball b) b)  ;stub
 
@@ -121,12 +94,10 @@
    (... b)))
 
 (define (next-ball b)
-  (cond
-    [(and (collide-left? b) (collide-bottom? b)) (bounce-bottom(bounce-left b))]
-    [(collide-left? b) (bounce-left b)]
-    [(collide-right? b) (bounce-right b)]
-    [(collide-bottom? b) (bounce-bottom b)]
-    [else (move-ball b)]))
+  (cond [(collide-left? b) (bounce-left b)]
+        [(collide-right? b) (bounce-right b)]
+        [(collide-bottom? b) (bounce-bottom b)]
+        [else (move-ball b)]))
 
 (@htdf collide-left?)
 (@signature Ball -> Ball)
@@ -326,29 +297,21 @@
         [else 0]))
 
 (@htdf render)
-(@signature ListOfBall -> Image)
-;; produce image with all Balls in list at appropriate x and y over MTS
-(check-expect (render (cons (make-ball 100 200 0 0) empty))
-              (place-image BALL-IMAGE 100 200 MTS))
-(check-expect (render (cons (make-ball 0 0 0 0) (cons (make-ball 100 100 2 2) empty)))
-              (place-image BALL-IMAGE 100 100
-                           (place-image BALL-IMAGE 0 0 MTS)))
+(@signature Ball -> Image)
+;; produce image with ball placed on MTS at proper x, y position
+(check-expect (render (make-ball 100 200 10 20)) (place-image BALL-IMAGE 100 200 MTS))
+;(define (render b) MTS) ;stub
 
-;(define (render lob) MTS) ;stub
-
-(@template-origin ListOfBall)
+(@template-origin Ball)
 
 (@template
- (define (render lob)
-   (cond [(empty? lob) (...)]
-         [else (... (fn-for-ball (first lob))
-                    (render (rest lob)))])))
+ (define (render b)
+   (... (ball-x b)
+        (ball-y b)
+        (ball-dx b)
+        (ball-dy b))))
 
-(define (render lob)
-  (cond [(empty? lob) MTS]
-        [else
-         (place-image
-          BALL-IMAGE
-          (ball-x (first lob))
-          (ball-y (first lob))
-          (render (rest lob)))]))
+(define (render b)
+  (place-image BALL-IMAGE (ball-x b) (ball-y b) MTS))
+
+(main B1)
