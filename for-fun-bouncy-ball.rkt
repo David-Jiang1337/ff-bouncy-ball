@@ -15,7 +15,7 @@
 (define WIDTH 400)
 (define HEIGHT 400)
 (define B-COEFF 0.9) ; Bounce coefficient (coefficient of velocity after bounce)
-(define GRAVITY 1) ; acceleration due to gravity, positive is down
+(define GRAVITY 3) ; acceleration due to gravity, positive is down
 (define BALL-RADIUS 20)
 (define BALL-IMAGE (circle BALL-RADIUS "solid" "black"))
 (define MTS (empty-scene WIDTH HEIGHT))
@@ -35,7 +35,7 @@
 ;; CONSTRAINT: x within [LEFT, RIGHT], y within [TOP, BOT]
 
 (define B1 (make-ball LEFT (+ TOP 0) 1 0))
-(define B2 (make-ball RIGHT (+ TOP 0) -1 0))
+(define B2 (make-ball RIGHT (+ TOP 0) -4 0))
 
 (@dd-template-rules compound) ; 4 fields
 
@@ -79,9 +79,10 @@
 (@template-origin htdw-main)
 
 (define (main b)
-  (big-bang b           ; Ball
-    (on-tick tock)      ; Ball -> Ball
-    (to-draw render)))  ; Ball -> Image
+  (big-bang b                 ; Ball
+    (on-tick tock)            ; Ball -> Ball
+    (to-draw render)          ; Ball -> Image
+    (on-mouse handle-mouse))) ; ListOfBall Integer Integer MouseEvent -> ListOfBall
 
 (@htdf tock)
 (@signature ListOfBall -> ListOfBall)
@@ -325,9 +326,37 @@
   (cond [(< (+ (* B-COEFF (- 0 (ball-dy b))) GRAVITY) 0) 1]
         [else 0]))
 
+(@htdf handle-mouse)
+(@signature ListOfBall Integer Integer MouseEvent -> ListOfBall)
+;; add ball with random dx at mouse position to ListOfBall when mouse down
+(define R1 (- (random 11) 5))
+ 
+;(check-expect (handle-mouse empty 100 100 "button-down")
+;              (cons (make-ball 100 100 R1 0) empty))
+(check-expect (handle-mouse (cons (make-ball 100 100 R1 0) empty) 100 100 "drag")
+              (cons (make-ball 100 100 R1 0) empty))
+
+;(define (handle-mouse lob x y me) lob) ;stub
+
+(@template-origin MouseEvent)
+
+(@template
+ (define (handle-mouse lob x y me)
+   (cond [(mouse=? me "button-down") (... loe x y)]
+         [else
+          (... loe x y)])))
+
+(define (handle-mouse lob x y me)
+   (cond [(mouse=? me "button-down")
+          (cons (make-ball x y (- (random 11) 5) 0) lob)]
+         [else lob]))
+
+
 (@htdf render)
 (@signature ListOfBall -> Image)
 ;; produce image with all Balls in list at appropriate x and y over MTS
+;; CONSTRAINT: ball-dx within [-5, 5]
+
 (check-expect (render (cons (make-ball 100 200 0 0) empty))
               (place-image BALL-IMAGE 100 200 MTS))
 (check-expect (render (cons (make-ball 0 0 0 0) (cons (make-ball 100 100 2 2) empty)))
